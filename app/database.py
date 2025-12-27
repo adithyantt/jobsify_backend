@@ -1,8 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-#SQLite database URL
-
+# SQLite database URL
 DATABASE_URL = "sqlite:///./jobsify.db"
 
 # Create DB Engine
@@ -11,8 +10,20 @@ engine = create_engine(
     connect_args={"check_same_thread": False}
 )
 
-#Create session (used in the APis)
-SessionLocal = sessionmaker(bind=engine)
+# Create session (used in APIs)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
 
-# Base  class for models
+# Base class for models
 Base = declarative_base()
+
+# ✅ THIS FUNCTION IS REQUIRED BY FASTAPI
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
