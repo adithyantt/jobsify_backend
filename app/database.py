@@ -20,7 +20,7 @@ SessionLocal = sessionmaker(
 # Base class for models
 Base = declarative_base()
 
-# ✅ THIS FUNCTION IS REQUIRED BY FASTAPI
+# ✅ THIS FUNCTION IS REQUIRED  FASTAPI
 def get_db():
     db = SessionLocal()
     try:
