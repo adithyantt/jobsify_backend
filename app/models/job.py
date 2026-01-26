@@ -6,6 +6,9 @@ class Job(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
-    description = Column(String)
-    category = Column(String, index=True)
-    location = Column(String)
+    category = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+    phone = Column(String, nullable=False)  
+    latitude = Column(String, nullable=True) 
+    longitude = Column(String, nullable=True)
