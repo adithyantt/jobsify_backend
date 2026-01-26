@@ -1,5 +1,7 @@
 from app.database import Base, engine
-from app.models import user, job
+from app.models.user import User
+from app.models.job import Job
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+print("Creating database tables...")
+Base.metadata.create_all(bind=engine)
+print("Done.")
