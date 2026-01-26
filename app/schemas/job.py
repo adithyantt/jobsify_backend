@@ -1,11 +1,13 @@
 from pydantic import BaseModel
-from typing import Optional
 
 class JobCreate(BaseModel):
     title: str
     category: str
-    description: Optional[str] = None
+    description: str
     location: str
+    phone: str
+    latitude: str | None = None
+    longitude: str | None = None
 
 class JobResponse(JobCreate):
     id: int
