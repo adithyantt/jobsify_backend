@@ -22,6 +22,9 @@ def create_job(job: JobCreate, db: Session = Depends(get_db)):
         category=job.category,
         description=job.description,
         location=job.location,
+        phone=job.phone,
+        latitude=job.latitude,
+        longitude=job.longitude,
     )
 
     db.add(new_job)
