@@ -8,9 +8,9 @@ class JobCreate(BaseModel):
     phone: str
     latitude: str | None = None
     longitude: str | None = None
-
+    
 class JobResponse(JobCreate):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
