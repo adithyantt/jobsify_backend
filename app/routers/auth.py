@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import bcrypt
 
 from app.database import get_db
 from app.schemas.user import UserCreate, UserLogin
@@ -27,10 +28,11 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     role = "admin" if user.email in ADMIN_EMAILS else "user"
 
     # 🆕 Create new user
+    hashed_password = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
     new_user = User(
         name=user.name,
         email=user.email,
-        password=user.password,  # (plain for now, OK for project)
+        password=hashed_password,
         role=role
     )
 
@@ -53,12 +55,12 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if db_user.password != user.password:
+    if not bcrypt.checkpw(user.password.encode(), db_user.password.encode()):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     return {
         "message": "Login successful",
-        "role": db_user.role,
         "email": db_user.email,
-        "role": db_user.role
+        "role": db_user.role,
+        "name": db_user.name
     }
