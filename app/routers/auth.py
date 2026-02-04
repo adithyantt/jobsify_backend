@@ -8,14 +8,14 @@ from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# 🔐 PREDEFINED ADMIN EMAILS
+# 🔐 PREDEFINED ADMIN EMAILS (DEV ONLY)
 ADMIN_EMAILS = [
     "admin@jobsify.com",
     "jobsify.admin@gmail.com"
 ]
 
 
-# ✅ REGISTER
+# ================= REGISTER =================
 @router.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
 
@@ -24,11 +24,16 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # 🔐 Decide role automatically
-    role = "admin" if user.email in ADMIN_EMAILS else "user"
+    # 🔐 Decide role
+    role = "admin" if user.email in ADMIN_EMAILS else "seeker"
 
-    # 🆕 Create new user
-    hashed_password = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
+    # 🔐 Hash password
+    hashed_password = bcrypt.hashpw(
+        user.password.encode(),
+        bcrypt.gensalt()
+    ).decode()
+
+    # 🆕 Create user
     new_user = User(
         name=user.name,
         email=user.email,
@@ -46,7 +51,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     }
 
 
-# ✅ LOGIN
+# ================= LOGIN =================
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
 
@@ -55,12 +60,16 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if not bcrypt.checkpw(user.password.encode(), db_user.password.encode()):
+    if not bcrypt.checkpw(
+        user.password.encode(),
+        db_user.password.encode()
+    ):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     return {
         "message": "Login successful",
+        "id": db_user.id,
+        "name": db_user.name,
         "email": db_user.email,
-        "role": db_user.role,
-        "name": db_user.name
+        "role": db_user.role
     }
