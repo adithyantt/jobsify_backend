@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Boolean
 from app.database import Base
 
 class Job(Base):
@@ -12,3 +12,4 @@ class Job(Base):
     phone = Column(String, nullable=False)  
     latitude = Column(String, nullable=True) 
     longitude = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=False)

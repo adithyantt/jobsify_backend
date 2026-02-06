@@ -11,6 +11,7 @@ class JobCreate(BaseModel):
     
 class JobResponse(JobCreate):
     id: int
+    is_verified: bool
 
     class Config:
         from_attributes = True

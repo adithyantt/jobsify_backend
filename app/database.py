@@ -27,3 +27,11 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# 👇 IMPORT ALL MODELS SO SQLAlchemy KNOWS THEM
+from app.models.job import Job
+from app.models.workers import Worker
+from app.models.report import Report
+
+# 👇 CREATE TABLES
+Base.metadata.create_all(bind=engine)
