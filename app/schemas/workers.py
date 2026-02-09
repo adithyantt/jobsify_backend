@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 class WorkerCreate(BaseModel):
     name: str
@@ -6,8 +7,11 @@ class WorkerCreate(BaseModel):
     phone: str
     experience: int
     location: str
-    latitude: str | None = None
-    longitude: str | None = None
+    latitude: Optional[str] = None
+    longitude: Optional[str] = None
+    user_email: str  # Add user email
+
+    model_config = ConfigDict(from_attributes=True)
 
 class WorkerResponse(WorkerCreate):
     id: int
@@ -15,6 +19,3 @@ class WorkerResponse(WorkerCreate):
     reviews: int
     is_available: bool
     is_verified: bool
-
-    class Config:
-        from_attributes = True

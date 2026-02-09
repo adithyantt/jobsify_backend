@@ -17,5 +17,6 @@ class Worker(Base):
     latitude = Column(String, nullable=True)
     longitude = Column(String, nullable=True)
 
+    user_email = Column(String, nullable=False)  # Add user email
     is_available = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)

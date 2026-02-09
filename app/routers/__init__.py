@@ -1,0 +1,8 @@
+from .auth import router as auth
+from .jobs import router as jobs
+from .workers import router as workers
+from .reports import router as reports
+from .admin_reports import router as admin_reports
+from .admin_workers import router as admin_workers
+from .notifications import router as notifications
+from .admin import router as admin

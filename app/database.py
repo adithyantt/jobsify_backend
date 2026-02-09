@@ -1,8 +1,9 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# SQLite database URL
-DATABASE_URL = "sqlite:///./jobsify.db"
+# SQLite database URL - use absolute path to avoid issues
+DATABASE_URL = f"sqlite:///{os.path.join(os.path.dirname(__file__), '../jobsify.db')}"
 
 # Create DB Engine
 engine = create_engine(
@@ -29,6 +30,7 @@ def get_db():
         db.close()
 
 # 👇 IMPORT ALL MODELS SO SQLAlchemy KNOWS THEM
+from app.models.user import User
 from app.models.job import Job
 from app.models.workers import Worker
 from app.models.report import Report
