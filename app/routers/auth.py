@@ -15,14 +15,10 @@ security = HTTPBearer()
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-<<<<<<< HEAD
 # Temporary OTP storage (use Redis in production)
 otp_storage = {}
 
-# 🔐 PREDEFINED ADMIN EMAILS
-=======
 # 🔐 PREDEFINED ADMIN EMAILS (DEV ONLY)
->>>>>>> origin/main
 ADMIN_EMAILS = [
     "admin@jobsify.com",
     "jobsify.admin@gmail.com",
@@ -132,7 +128,6 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     }
 
 
-<<<<<<< HEAD
 # ✅ VERIFY OTP
 @router.post("/verify-otp")
 def verify_otp(data: dict, db: Session = Depends(get_db)):
@@ -164,10 +159,8 @@ def verify_otp(data: dict, db: Session = Depends(get_db)):
         "name": db_user.name
     }
 
-# ✅ LOGIN
-=======
+
 # ================= LOGIN =================
->>>>>>> origin/main
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
 

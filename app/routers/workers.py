@@ -4,30 +4,15 @@ from typing import List
 
 from app.database import get_db
 from app.models.workers import Worker
-<<<<<<< HEAD
 from app.models.report import Report
 from app.models.notification import Notification
 from app.schemas.workers import WorkerCreate, WorkerResponse
 from app.schemas.report import ReportCreate, ReportResponse
-=======
-from app.schemas.workers import WorkerCreate, WorkerOut
->>>>>>> origin/main
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
 
-
-<<<<<<< HEAD
-# =====================================================
-# 👤 USER SIDE – GET ONLY VERIFIED WORKERS
-# =====================================================
-@router.get("", response_model=list[WorkerResponse])
-def get_workers(db: Session = Depends(get_db)):
-    return (
-        db.query(Worker)
-        .filter(Worker.is_verified == True)
-=======
 # 🔹 GET VERIFIED & AVAILABLE WORKERS
-@router.get("", response_model=list[WorkerOut])
+@router.get("", response_model=list[WorkerResponse])
 def get_workers(db: Session = Depends(get_db)):
     return (
         db.query(Worker)
@@ -35,12 +20,9 @@ def get_workers(db: Session = Depends(get_db)):
             Worker.is_verified == True,
             Worker.is_available == True
         )
->>>>>>> origin/main
         .all()
     )
 
-
-<<<<<<< HEAD
 # =====================================================
 # 👤 USER SIDE – GET MY WORKERS (BY EMAIL)
 # =====================================================
@@ -51,7 +33,6 @@ def get_my_workers(email: str, db: Session = Depends(get_db)):
         .filter(Worker.user_email == email)
         .all()
     )
-
 
 # =====================================================
 # 👤 USER SIDE – CREATE WORKER PROFILE
@@ -78,7 +59,6 @@ def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
 
     return new_worker
 
-
 # =====================================================
 # 🛡️ ADMIN SIDE – GET PENDING WORKERS
 # =====================================================
@@ -89,7 +69,6 @@ def get_pending_workers(db: Session = Depends(get_db)):
         .filter(Worker.is_verified == False)
         .all()
     )
-
 
 # =====================================================
 # 🛡️ ADMIN SIDE – APPROVE WORKER
@@ -118,7 +97,6 @@ def approve_worker(worker_id: int, db: Session = Depends(get_db)):
         "worker_id": worker_id
     }
 
-
 # =====================================================
 # 🛡️ ADMIN SIDE – REJECT WORKER
 # =====================================================
@@ -136,7 +114,6 @@ def reject_worker(worker_id: int, db: Session = Depends(get_db)):
         "message": "Worker rejected and deleted successfully",
         "worker_id": worker_id
     }
-
 
 # =====================================================
 # 👤 USER SIDE – UPDATE WORKER
@@ -161,7 +138,6 @@ def update_worker(worker_id: int, worker: WorkerCreate, email: str = Query(...),
 
     return existing_worker
 
-
 # =====================================================
 # 👤 USER SIDE – DELETE WORKER
 # =====================================================
@@ -179,7 +155,6 @@ def delete_worker(worker_id: int, email: str = Query(...), db: Session = Depends
         "message": "Worker deleted successfully",
         "worker_id": worker_id
     }
-
 
 # =====================================================
 # 👤 USER SIDE – REPORT WORKER
@@ -207,13 +182,3 @@ def report_worker(report: ReportCreate, db: Session = Depends(get_db)):
     db.refresh(new_report)
 
     return new_report
-=======
-# 🔹 CREATE WORKER (availability set by user)
-@router.post("", status_code=201)
-def create_worker(data: WorkerCreate, db: Session = Depends(get_db)):
-    worker = Worker(**data.dict())
-    db.add(worker)
-    db.commit()
-    db.refresh(worker)
-    return {"success": True}
->>>>>>> origin/main
