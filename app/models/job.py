@@ -12,10 +12,10 @@ class Job(Base):
     description = Column(String, nullable=False)
     location = Column(String, nullable=False)
     phone = Column(String, nullable=False)
-
     latitude = Column(String, nullable=True)
     longitude = Column(String, nullable=True)
-
+    user_email = Column(String, nullable=False)  # Add user email
+    is_verified = Column(Boolean, default=False)
     urgent = Column(Boolean, default=False)
     verified = Column(Boolean, default=False)
     salary = Column(String, nullable=True)

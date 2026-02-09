@@ -2,15 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.workers import Worker
-from app.schemas.workers import WorkerOut
+from app.schemas.workers import WorkerResponse
 from typing import List
 
 router = APIRouter(prefix="/admin/workers", tags=["Admin Workers"])
 
-@router.get("/pending", response_model=List[WorkerOut])
+@router.get("/pending", response_model=List[WorkerResponse])
 def pending_workers(db: Session = Depends(get_db)):
     return db.query(Worker).filter(Worker.is_verified == False).all()
-
 
 @router.put("/verify/{worker_id}")
 def verify_worker(worker_id: int, db: Session = Depends(get_db)):
@@ -21,7 +20,6 @@ def verify_worker(worker_id: int, db: Session = Depends(get_db)):
     worker.is_verified = True
     db.commit()
     return {"message": "Worker verified"}
-
 
 @router.delete("/{worker_id}")
 def delete_worker(worker_id: int, db: Session = Depends(get_db)):

@@ -12,7 +12,7 @@ class Worker(Base):
     location = Column(String)
     latitude = Column(String, nullable=True)
     longitude = Column(String, nullable=True)
-
+    user_email = Column(String, nullable=False)  # Add user email
     is_verified = Column(Boolean, default=False)
     is_available = Column(Boolean, default=True)
     rating = Column(Float, default=4.0)
