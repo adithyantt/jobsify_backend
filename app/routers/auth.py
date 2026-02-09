@@ -15,10 +15,14 @@ security = HTTPBearer()
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+<<<<<<< HEAD
 # Temporary OTP storage (use Redis in production)
 otp_storage = {}
 
 # 🔐 PREDEFINED ADMIN EMAILS
+=======
+# 🔐 PREDEFINED ADMIN EMAILS (DEV ONLY)
+>>>>>>> origin/main
 ADMIN_EMAILS = [
     "admin@jobsify.com",
     "jobsify.admin@gmail.com",
@@ -69,7 +73,7 @@ def send_otp_email(recipient_email: str, otp: str):
         return False
 
 
-# ✅ REGISTER
+# ================= REGISTER =================
 @router.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
 
@@ -93,11 +97,16 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     if len(user.password) < 8 or not any(c.isupper() for c in user.password) or not any(c.islower() for c in user.password) or not any(c.isdigit() for c in user.password):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters long and include uppercase, lowercase, and numeric characters.")
 
-    # 🔐 Decide role automatically
-    role = "admin" if user.email in ADMIN_EMAILS else "user"
+    # 🔐 Decide role
+    role = "admin" if user.email in ADMIN_EMAILS else "seeker"
 
-    # 🆕 Create new user
-    hashed_password = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
+    # 🔐 Hash password
+    hashed_password = bcrypt.hashpw(
+        user.password.encode(),
+        bcrypt.gensalt()
+    ).decode()
+
+    # 🆕 Create user
     new_user = User(
         name=user.name,
         email=user.email,
@@ -123,6 +132,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     }
 
 
+<<<<<<< HEAD
 # ✅ VERIFY OTP
 @router.post("/verify-otp")
 def verify_otp(data: dict, db: Session = Depends(get_db)):
@@ -155,6 +165,9 @@ def verify_otp(data: dict, db: Session = Depends(get_db)):
     }
 
 # ✅ LOGIN
+=======
+# ================= LOGIN =================
+>>>>>>> origin/main
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
 
@@ -187,7 +200,10 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     if not db_user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    if not bcrypt.checkpw(user.password.encode(), db_user.password.encode()):
+    if not bcrypt.checkpw(
+        user.password.encode(),
+        db_user.password.encode()
+    ):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     # Skip OTP verification for admins
@@ -205,9 +221,10 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 
     return {
         "message": "Login successful",
+        "id": db_user.id,
+        "name": db_user.name,
         "email": db_user.email,
-        "role": db_user.role,
-        "name": db_user.name
+        "role": db_user.role
     }
 
 # 🔐 GET CURRENT ADMIN (Dependency for protected routes)

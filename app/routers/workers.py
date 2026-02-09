@@ -4,14 +4,19 @@ from typing import List
 
 from app.database import get_db
 from app.models.workers import Worker
+<<<<<<< HEAD
 from app.models.report import Report
 from app.models.notification import Notification
 from app.schemas.workers import WorkerCreate, WorkerResponse
 from app.schemas.report import ReportCreate, ReportResponse
+=======
+from app.schemas.workers import WorkerCreate, WorkerOut
+>>>>>>> origin/main
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
 
 
+<<<<<<< HEAD
 # =====================================================
 # 👤 USER SIDE – GET ONLY VERIFIED WORKERS
 # =====================================================
@@ -20,10 +25,22 @@ def get_workers(db: Session = Depends(get_db)):
     return (
         db.query(Worker)
         .filter(Worker.is_verified == True)
+=======
+# 🔹 GET VERIFIED & AVAILABLE WORKERS
+@router.get("", response_model=list[WorkerOut])
+def get_workers(db: Session = Depends(get_db)):
+    return (
+        db.query(Worker)
+        .filter(
+            Worker.is_verified == True,
+            Worker.is_available == True
+        )
+>>>>>>> origin/main
         .all()
     )
 
 
+<<<<<<< HEAD
 # =====================================================
 # 👤 USER SIDE – GET MY WORKERS (BY EMAIL)
 # =====================================================
@@ -190,3 +207,13 @@ def report_worker(report: ReportCreate, db: Session = Depends(get_db)):
     db.refresh(new_report)
 
     return new_report
+=======
+# 🔹 CREATE WORKER (availability set by user)
+@router.post("", status_code=201)
+def create_worker(data: WorkerCreate, db: Session = Depends(get_db)):
+    worker = Worker(**data.dict())
+    db.add(worker)
+    db.commit()
+    db.refresh(worker)
+    return {"success": True}
+>>>>>>> origin/main

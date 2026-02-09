@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean
+from datetime import datetime
 from app.database import Base
+
 
 class Job(Base):
     __tablename__ = "jobs"
@@ -14,3 +16,7 @@ class Job(Base):
     longitude = Column(String, nullable=True)
     user_email = Column(String, nullable=False)  # Add user email
     is_verified = Column(Boolean, default=False)
+    urgent = Column(Boolean, default=False)
+    verified = Column(Boolean, default=False)
+    salary = Column(String, nullable=True)
+    created_at = Column(String, default=lambda: datetime.now().isoformat())

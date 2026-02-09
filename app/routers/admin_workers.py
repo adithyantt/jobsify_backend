@@ -2,12 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.workers import Worker
+<<<<<<< HEAD
 from app.schemas.workers import WorkerResponse
+=======
+from app.schemas.workers import WorkerOut
+>>>>>>> origin/main
 from typing import List
 
 router = APIRouter(prefix="/admin/workers", tags=["Admin Workers"])
 
+<<<<<<< HEAD
 @router.get("/pending", response_model=List[WorkerResponse])
+=======
+@router.get("/pending", response_model=List[WorkerOut])
+>>>>>>> origin/main
 def pending_workers(db: Session = Depends(get_db)):
     return db.query(Worker).filter(Worker.is_verified == False).all()
 
