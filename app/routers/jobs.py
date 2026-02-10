@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, Query
-=======
-from fastapi import APIRouter, Depends, HTTPException
->>>>>>> origin/main
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -13,92 +9,117 @@ from app.models.notification import Notification
 from app.schemas.job import JobCreate, JobResponse
 from app.schemas.report import ReportCreate, ReportResponse
 
-<<<<<<< HEAD
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
-=======
-router = APIRouter()
->>>>>>> origin/main
 
 # ---------------- USER SIDE ----------------
 
-<<<<<<< HEAD
 # =====================================================
 # 👤 USER SIDE – GET ONLY VERIFIED JOBS
 # =====================================================
 @router.get("", response_model=list[JobResponse])
 def get_jobs(db: Session = Depends(get_db)):
-    return (
-        db.query(Job)
-        .filter(Job.is_verified == True)
-=======
-# ✅ GET ALL VERIFIED JOBS (PUBLIC)
-@router.get("/jobs", response_model=List[JobResponse])
-def get_jobs(db: Session = Depends(get_db)):
-    return (
-        db.query(Job)
-        .filter(Job.verified == True)   # ✅ ONLY VERIFIED JOBS
-        .order_by(Job.id.desc())
-        .all()
-    )
-
-    return (
-        db.query(Job)
-        .filter(Job.verified == True)
-        .order_by(Job.id.desc())
->>>>>>> origin/main
-        .all()
-    )
+    try:
+        jobs = (
+            db.query(Job)
+            .filter(Job.verified == True)
+            .order_by(Job.id.desc())
+            .all()
+        )
+        return jobs
+    except Exception as e:
+        print(f"ERROR in get_jobs: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-<<<<<<< HEAD
 # =====================================================
 # 👤 USER SIDE – GET MY JOBS (BY EMAIL)
 # =====================================================
 @router.get("/my", response_model=list[JobResponse])
-def get_my_jobs(email: str, db: Session = Depends(get_db)):
-    return (
-        db.query(Job)
-        .filter(Job.user_email == email)
-        .all()
-    )
+def get_my_jobs(email: str = Query(..., description="User email"), db: Session = Depends(get_db)):
+    print(f"DEBUG: get_my_jobs called with email={email}")
+    try:
+        if not email or email.strip() == "":
+            raise HTTPException(status_code=400, detail="Email parameter is required")
+        
+        # Validate email format
+        email = email.strip().lower()
+        if "@" not in email:
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Check if Job model has user_email attribute
+        if not hasattr(Job, 'user_email'):
+            print("ERROR: Job model does not have user_email attribute")
+            raise HTTPException(status_code=500, detail="Server configuration error: missing user_email field")
+        
+        # Query jobs with error handling
+        try:
+            jobs = (
+                db.query(Job)
+                .filter(Job.user_email == email)
+                .order_by(Job.id.desc())
+                .all()
+            )
+            print(f"DEBUG: Found {len(jobs)} jobs for email={email}")
+            return jobs
+        except Exception as query_error:
+            print(f"ERROR in database query: {query_error}")
+            # Try to get more details about the error
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Database query error: {str(query_error)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in get_my_jobs: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
 
 
 # =====================================================
 # 👤 USER SIDE – CREATE JOB
-# (DEFAULT: is_verified = False)
+# (DEFAULT: verified = False)
 # =====================================================
 @router.post("", response_model=JobResponse)
-=======
-# ✅ CREATE JOB (DEFAULT = NOT VERIFIED)
-@router.post("/jobs", response_model=JobResponse)
->>>>>>> origin/main
 def create_job(job: JobCreate, db: Session = Depends(get_db)):
-    new_job = Job(
-        title=job.title,
-        category=job.category,
-        description=job.description,
-        location=job.location,
-        phone=job.phone,
-        latitude=job.latitude,
-        longitude=job.longitude,
-<<<<<<< HEAD
-        user_email=job.user_email,  # Add user email
-        is_verified=False   # 🔒 Admin approval required
-=======
-        urgent=job.urgent,
-        verified=False,  # ❗ admin must verify
-        salary=job.salary,
->>>>>>> origin/main
-    )
+    try:
+        print(f"DEBUG: Creating job with data: {job.model_dump()}")
+        
+        new_job = Job(
+            title=job.title,
+            category=job.category,
+            description=job.description,
+            location=job.location,
+            phone=job.phone,
+            latitude=job.latitude,
+            longitude=job.longitude,
+            user_email=job.user_email,  # Add user email
+            verified=False,   # 🔒 Admin approval required
+            urgent=job.urgent if job.urgent is not None else False,
+            salary=job.salary,
+        )
 
-    db.add(new_job)
-    db.commit()
-    db.refresh(new_job)
+        db.add(new_job)
+        db.commit()
+        db.refresh(new_job)
+        
+        print(f"DEBUG: Job created successfully with ID: {new_job.id}")
 
-    return new_job
+        return new_job
+        
+    except Exception as e:
+        print(f"ERROR in create_job: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create job: {str(e)}")
 
 
-<<<<<<< HEAD
 # =====================================================
 # 🛡️ ADMIN SIDE – GET PENDING JOBS
 # =====================================================
@@ -106,40 +127,22 @@ def create_job(job: JobCreate, db: Session = Depends(get_db)):
 def get_pending_jobs(db: Session = Depends(get_db)):
     return (
         db.query(Job)
-        .filter(Job.is_verified == False)
-=======
-# ---------------- ADMIN SIDE ----------------
-
-# ✅ GET ALL PENDING JOBS (ADMIN)
-@router.get("/admin/jobs/pending", response_model=List[JobResponse])
-def get_pending_jobs(db: Session = Depends(get_db)):
-    return (
-        db.query(Job)
         .filter(Job.verified == False)
         .order_by(Job.id.desc())
->>>>>>> origin/main
         .all()
     )
 
-
-<<<<<<< HEAD
 # =====================================================
 # 🛡️ ADMIN SIDE – APPROVE JOB
 # =====================================================
 @router.put("/admin/approve/{job_id}")
 def approve_job(job_id: int, db: Session = Depends(get_db)):
-=======
-# ✅ VERIFY A JOB (ADMIN)
-@router.put("/admin/jobs/verify/{job_id}")
-def verify_job(job_id: int, db: Session = Depends(get_db)):
->>>>>>> origin/main
     job = db.query(Job).filter(Job.id == job_id).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-<<<<<<< HEAD
-    job.is_verified = True
+    job.verified = True
     db.commit()
 
     # Create notification for the user
@@ -153,34 +156,19 @@ def verify_job(job_id: int, db: Session = Depends(get_db)):
 
     return {
         "message": "Job approved successfully",
-=======
-    job.verified = True
-    db.commit()
-
-    return {
-        "message": "Job verified successfully",
->>>>>>> origin/main
         "job_id": job_id
     }
 
-
-<<<<<<< HEAD
 # =====================================================
 # 🛡️ ADMIN SIDE – REJECT JOB
 # =====================================================
 @router.put("/admin/reject/{job_id}")
 def reject_job(job_id: int, db: Session = Depends(get_db)):
-=======
-# ❌ OPTIONAL: DELETE / REJECT JOB (ADMIN)
-@router.delete("/admin/jobs/{job_id}")
-def delete_job(job_id: int, db: Session = Depends(get_db)):
->>>>>>> origin/main
     job = db.query(Job).filter(Job.id == job_id).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-<<<<<<< HEAD
     # Create notification for the user before deleting
     notification = Notification(
         user_email=job.user_email,
@@ -197,7 +185,6 @@ def delete_job(job_id: int, db: Session = Depends(get_db)):
         "message": "Job rejected and deleted successfully",
         "job_id": job_id
     }
-
 
 # =====================================================
 # 👤 USER SIDE – UPDATE JOB
@@ -222,7 +209,6 @@ def update_job(job_id: int, job: JobCreate, email: str = Query(...), db: Session
 
     return existing_job
 
-
 # =====================================================
 # 👤 USER SIDE – DELETE JOB
 # =====================================================
@@ -240,7 +226,6 @@ def delete_job(job_id: int, email: str = Query(...), db: Session = Depends(get_d
         "message": "Job deleted successfully",
         "job_id": job_id
     }
-
 
 # =====================================================
 # 👤 USER SIDE – REPORT JOB
@@ -282,36 +267,3 @@ def report_job(report: ReportCreate, db: Session = Depends(get_db)):
         traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create report: {str(e)}")
-=======
-    db.delete(job)
-    db.commit()
-
-    return {"message": "Job deleted successfully"}
-
-@router.put("/jobs/{job_id}/verify")
-def verify_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.query(Job).filter(Job.id == job_id).first()
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    job.verified = True
-    db.commit()
-    db.refresh(job)
-
-    return {
-        "message": "Job verified successfully",
-        "job_id": job.id
-    }
-@router.get("/admin/stats")
-def admin_stats(db: Session = Depends(get_db)):
-    total_jobs = db.query(Job).count()
-    verified_jobs = db.query(Job).filter(Job.verified == True).count()
-    pending_jobs = db.query(Job).filter(Job.verified == False).count()
-
-    return {
-        "total_jobs": total_jobs,
-        "verified_jobs": verified_jobs,
-        "pending_jobs": pending_jobs
-    }
->>>>>>> origin/main

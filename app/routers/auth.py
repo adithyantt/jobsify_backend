@@ -6,10 +6,18 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.schemas.user import UserCreate, UserLogin
 from app.models.user import User
+
+# JWT Configuration
+JWT_SECRET = "your-secret-key-change-in-production"  # Change this in production!
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
 
 security = HTTPBearer()
 
@@ -212,27 +220,52 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "message": "Account not verified. OTP sent to your email. Please verify your email."
         }
 
+    # Create JWT access token
+    access_token = create_access_token(data={"sub": db_user.email})
+
     return {
         "message": "Login successful",
         "id": db_user.id,
         "name": db_user.name,
         "email": db_user.email,
-        "role": db_user.role
+        "role": db_user.role,
+        "access_token": access_token,
+        "token_type": "bearer"
     }
+
+
+def create_access_token(data: dict):
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str):
+    """Verify and decode a JWT token."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # 🔐 GET CURRENT ADMIN (Dependency for protected routes)
 def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     token = credentials.credentials
-    # For simplicity, we'll decode the token (in production, use JWT)
-    # Assuming token is just the email for now
     try:
-        # This is a simplified version - in production use proper JWT
-        payload = token  # Simplified
-        email = payload
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
 
         user = db.query(User).filter(User.email == email, User.role == "admin").first()
         if not user:
             raise HTTPException(status_code=401, detail="Invalid token or not admin")
         return user
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")

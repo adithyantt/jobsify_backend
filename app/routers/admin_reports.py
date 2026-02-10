@@ -1,6 +1,6 @@
-<<<<<<< HEAD
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.report import Report
@@ -13,6 +13,11 @@ router = APIRouter(
     prefix="/admin/reports",
     tags=["Admin Reports"]
 )
+
+# Request body model for report action
+class ReportActionRequest(BaseModel):
+    action: str  # ignore | warn | ban
+
 
 # 🔹 GET ALL REPORTS
 @router.get("/")
@@ -28,14 +33,16 @@ def get_pending_reports(db: Session = Depends(get_db)):
 @router.put("/{report_id}/action")
 def take_action_on_report(
     report_id: int,
-    action: str,  # ignore | resolve | ban
+    action_data: ReportActionRequest,
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin)
 ):
+    action = action_data.action
+
     report = db.query(Report).filter(Report.id == report_id).first()
 
     if not report:
-        return {"error": "Report not found"}
+        raise HTTPException(status_code=404, detail="Report not found")
 
     # Map frontend actions to backend statuses
     action_mapping = {
@@ -45,7 +52,7 @@ def take_action_on_report(
     }
 
     if action not in action_mapping:
-        return {"error": "Invalid action"}
+        raise HTTPException(status_code=400, detail="Invalid action")
 
     status = action_mapping[action]
 
@@ -73,45 +80,5 @@ def take_action_on_report(
 
     return {
         "message": f"Report {status} successfully",
-        "report_id": report_id,
-=======
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models.report import Report
-from app.models.workers import Worker
-
-router = APIRouter(prefix="/admin/reports", tags=["Admin Reports"])
-
-
-# 🔹 ADMIN ACTION ON REPORT
-@router.put("/{report_id}/action")
-def take_action_on_report(
-    report_id: int,
-    action: str,
-    db: Session = Depends(get_db)
-):
-    report = db.query(Report).filter(Report.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    if action == "ignore":
-        report.status = "ignored"
-
-    elif action == "resolve":
-        report.status = "resolved"
-
-    elif action == "ban":
-        worker = db.query(Worker).filter(Worker.id == report.worker_id).first()
-        if worker:
-            worker.is_available = False
-        report.status = "resolved"
-
-    else:
-        raise HTTPException(status_code=400, detail="Invalid action")
-
-    db.commit()
-    return {
-        "message": f"Report {action}d successfully"
->>>>>>> origin/main
+        "report_id": report_id
     }

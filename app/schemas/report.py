@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from datetime import datetime
 
 class ReportCreate(BaseModel):
     worker_id: Optional[int] = None
@@ -12,3 +13,6 @@ class ReportCreate(BaseModel):
 
 class ReportResponse(ReportCreate):
     id: int
+    user_id: Optional[int] = None
+    status: str = "pending"
+    created_at: Optional[datetime] = None
