@@ -1,20 +1,19 @@
-# Backend Fixes TODO
+# Authentication Fix TODO
 
-## Tasks:
-- [x] Fix `app/schemas/report.py` - Add missing fields (status, created_at, user_id)
-- [x] Fix `app/routers/admin_reports.py` - Create request body model and update endpoint
-- [x] Fix `app/routers/auth.py` - Improve get_current_admin security with JWT tokens
-- [x] Update `app/routers/reports.py` - Ensure consistency with schema changes
-- [x] Add PyJWT to requirements.txt
-- [x] Test the API endpoints
+## Problem
+Flutter frontend sends "Bearer null" when UserSession.token is null, causing 401 errors on admin endpoints.
 
+## Backend Fixes
+- [x] app/routers/auth.py - Add null check in get_current_user() for consistency
 
+## Frontend Fixes  
+- [x] ../jobsify/lib/services/admin_service.dart - Add safe token helper method
+- [x] ../jobsify/lib/screens/admin/admin_dashboard.dart - Use safe token retrieval
+- [x] ../jobsify/lib/screens/admin/screens/job_verification_screen.dart - Use safe token retrieval
+- [x] ../jobsify/lib/screens/admin/screens/users_screen.dart - Use safe token retrieval
+- [x] ../jobsify/lib/screens/admin/screens/provider_verification_screen.dart - Use safe token retrieval
+- [x] ../jobsify/lib/screens/admin/screens/reports_screen.dart - Use safe token retrieval
 
-## Progress:
-- Started: [Current Date]
-- Last Updated: [Current Date]
-
-## Notes:
-- JWT authentication now returns access_token on login
-- Admin endpoints now require proper JWT Bearer tokens
-- Report action endpoint now uses JSON request body instead of query params
+## Testing
+- [ ] Verify admin endpoints work correctly
+- [ ] Check job verification functionality
