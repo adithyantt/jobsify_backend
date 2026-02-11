@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -7,6 +9,7 @@ from app.models.report import Report
 from app.models.workers import Worker
 from app.models.notification import Notification
 from app.models.user import User
+from app.schemas.report import ReportResponse
 from app.routers.auth import get_current_admin
 
 router = APIRouter(
@@ -14,65 +17,66 @@ router = APIRouter(
     tags=["Admin Reports"]
 )
 
-# Request body model for report action
+
 class ReportActionRequest(BaseModel):
     action: str  # ignore | warn | ban
 
 
-# 🔹 GET ALL REPORTS
 @router.get("/")
-def get_all_reports(db: Session = Depends(get_db)):
+def get_all_reports(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
     return db.query(Report).order_by(Report.id.desc()).all()
 
-# 🔹 GET PENDING REPORTS
+
 @router.get("/pending")
-def get_pending_reports(db: Session = Depends(get_db)):
+def get_pending_reports(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
     return db.query(Report).filter(Report.status == "pending").order_by(Report.id.desc()).all()
 
-# 🔹 TAKE ACTION ON A REPORT
+
 @router.put("/{report_id}/action")
 def take_action_on_report(
     report_id: int,
-    action_data: ReportActionRequest,
+    action_data: Optional[ReportActionRequest] = None,
+    action: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin)
+    current_admin: User = Depends(get_current_admin),
 ):
-    action = action_data.action
+    # Accept both body and query param to avoid frontend/backend mismatch.
+    resolved_action = (action_data.action if action_data else action)
 
     report = db.query(Report).filter(Report.id == report_id).first()
-
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Map frontend actions to backend statuses
     action_mapping = {
         "ignore": "ignored",
         "warn": "warned",
-        "ban": "banned"
+        "ban": "banned",
     }
 
-    if action not in action_mapping:
+    if not resolved_action or resolved_action not in action_mapping:
         raise HTTPException(status_code=400, detail="Invalid action")
 
-    status = action_mapping[action]
-
-    # update report status
+    status = action_mapping[resolved_action]
     report.status = status
 
-    # if banned → disable worker
-    if status == "banned":
-        worker = db.query(Worker).filter(
-            Worker.id == report.worker_id
-        ).first()
+    if status == "banned" and report.worker_id is not None:
+        worker = db.query(Worker).filter(Worker.id == report.worker_id).first()
         if worker:
             worker.is_verified = False
             worker.is_available = False
 
-    # Create notification for the reporter
+    target = f"worker ID {report.worker_id}" if report.worker_id is not None else f"job ID {report.job_id}"
+
     notification = Notification(
         user_email=report.reporter_email,
         title="Report Action Taken",
-        message=f"Your report on worker ID {report.worker_id} has been {status}."
+        message=f"Your report on {target} has been {status}."
     )
     db.add(notification)
 
@@ -80,5 +84,5 @@ def take_action_on_report(
 
     return {
         "message": f"Report {status} successfully",
-        "report_id": report_id
+        "report_id": report_id,
     }
