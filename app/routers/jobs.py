@@ -6,10 +6,13 @@ from app.database import get_db
 from app.models.job import Job
 from app.models.report import Report
 from app.models.notification import Notification
+from app.models.user import User
 from app.schemas.job import JobCreate, JobResponse
 from app.schemas.report import ReportCreate, ReportResponse
+from app.routers.auth import get_current_admin
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
+
 
 # ---------------- USER SIDE ----------------
 
@@ -124,7 +127,7 @@ def create_job(job: JobCreate, db: Session = Depends(get_db)):
 # 🛡️ ADMIN SIDE – GET PENDING JOBS
 # =====================================================
 @router.get("/admin/pending", response_model=list[JobResponse])
-def get_pending_jobs(db: Session = Depends(get_db)):
+def get_pending_jobs(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
     return (
         db.query(Job)
         .filter(Job.verified == False)
@@ -132,11 +135,13 @@ def get_pending_jobs(db: Session = Depends(get_db)):
         .all()
     )
 
+
 # =====================================================
 # 🛡️ ADMIN SIDE – APPROVE JOB
 # =====================================================
 @router.put("/admin/approve/{job_id}")
-def approve_job(job_id: int, db: Session = Depends(get_db)):
+def approve_job(job_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
+
     job = db.query(Job).filter(Job.id == job_id).first()
 
     if not job:
@@ -163,7 +168,8 @@ def approve_job(job_id: int, db: Session = Depends(get_db)):
 # 🛡️ ADMIN SIDE – REJECT JOB
 # =====================================================
 @router.put("/admin/reject/{job_id}")
-def reject_job(job_id: int, db: Session = Depends(get_db)):
+def reject_job(job_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
+
     job = db.query(Job).filter(Job.id == job_id).first()
 
     if not job:
