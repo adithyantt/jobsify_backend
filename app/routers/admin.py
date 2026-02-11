@@ -1,11 +1,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 from app.database import get_db
 from app.models.user import User
 from app.models.job import Job
 from app.models.workers import Worker
 from app.models.report import Report
+from app.schemas.user import UserResponse
 from app.routers.auth import get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -13,10 +15,12 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/stats")
 def get_admin_stats(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
     try:
-        pending_jobs = db.query(Job).filter(Job.is_verified == False).count()
+        pending_jobs = db.query(Job).filter(Job.verified == False).count()
         providers = db.query(Worker).filter(Worker.is_verified == False).count()
         users = db.query(User).count()
-        reports = db.query(Report).count()
+        # Use func.count to avoid loading all columns (fixes missing column issues)
+        from sqlalchemy import func
+        reports = db.query(func.count(Report.id)).scalar() or 0
         return {
             "pending_jobs": pending_jobs,
             "providers": providers,
@@ -24,9 +28,12 @@ def get_admin_stats(db: Session = Depends(get_db), current_admin: User = Depends
             "reports": reports
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/users")
+
+@router.get("/users", response_model=List[UserResponse])
 def get_all_users(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
     return db.query(User).all()
 
