@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
 from app.models.workers import Worker
@@ -9,19 +9,71 @@ from app.models.notification import Notification
 from app.schemas.workers import WorkerCreate, WorkerResponse
 from app.schemas.report import ReportCreate, ReportResponse
 
+
 router = APIRouter(prefix="/workers", tags=["Workers"])
 
-# 🔹 GET VERIFIED & AVAILABLE WORKERS
+# 🔹 GET VERIFIED & AVAILABLE WORKERS (WITH FILTERING)
 @router.get("", response_model=list[WorkerResponse])
-def get_workers(db: Session = Depends(get_db)):
-    return (
-        db.query(Worker)
-        .filter(
-            Worker.is_verified == True,
-            Worker.is_available == True
-        )
-        .all()
-    )
+def get_workers(
+    db: Session = Depends(get_db),
+    min_experience: Optional[int] = Query(None, description="Minimum years of experience"),
+    max_experience: Optional[int] = Query(None, description="Maximum years of experience"),
+    min_rating: Optional[float] = Query(None, description="Minimum rating (0-5)"),
+    location: Optional[str] = Query(None, description="Filter by location (partial match)"),
+    availability_type: Optional[str] = Query(None, description="Filter by availability type: everyday, selected_days, not_available"),
+    available_days: Optional[str] = Query(None, description="Filter by specific days (comma-separated: Mon,Tue,Wed)"),
+    is_available: Optional[bool] = Query(None, description="Filter by availability"),
+    sort_by: Optional[str] = Query("distance", description="Sort by: distance, experience_high, experience_low, rating_high, rating_low")
+):
+    query = db.query(Worker).filter(Worker.is_verified == True)
+    
+    # Apply availability filter
+    if is_available is not None:
+        query = query.filter(Worker.is_available == is_available)
+    else:
+        # Default: show only available workers
+        query = query.filter(Worker.is_available == True)
+    
+    # Apply availability type filter
+    if availability_type is not None:
+        query = query.filter(Worker.availability_type == availability_type)
+    
+    # Apply available days filter (workers who work on any of the specified days)
+    if available_days is not None:
+        days_list = [d.strip() for d in available_days.split(",")]
+        # Filter workers who have any of the specified days in their available_days
+        conditions = [Worker.available_days.ilike(f"%{day}%") for day in days_list]
+        from sqlalchemy import or_
+        query = query.filter(or_(*conditions))
+    
+    # Apply experience filters
+    if min_experience is not None:
+        query = query.filter(Worker.experience >= min_experience)
+    if max_experience is not None:
+        query = query.filter(Worker.experience <= max_experience)
+    
+    # Apply rating filter
+    if min_rating is not None:
+        query = query.filter(Worker.rating >= min_rating)
+    
+    # Apply location filter
+    if location is not None:
+        query = query.filter(Worker.location.ilike(f"%{location}%"))
+    
+    workers = query.all()
+    
+    # Apply sorting
+    if sort_by == "experience_high":
+        workers.sort(key=lambda w: w.experience, reverse=True)
+    elif sort_by == "experience_low":
+        workers.sort(key=lambda w: w.experience)
+    elif sort_by == "rating_high":
+        workers.sort(key=lambda w: w.rating or 0, reverse=True)
+    elif sort_by == "rating_low":
+        workers.sort(key=lambda w: w.rating or 0)
+    
+    return workers
+
 
 # =====================================================
 # 👤 USER SIDE – GET MY WORKERS (BY EMAIL)
@@ -40,6 +92,9 @@ def get_my_workers(email: str, db: Session = Depends(get_db)):
 # =====================================================
 @router.post("", response_model=WorkerResponse)
 def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
+    # Determine is_available based on availability_type
+    is_available = worker.availability_type != "not_available"
+    
     new_worker = Worker(
         name=worker.name,
         role=worker.role,
@@ -48,9 +103,11 @@ def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
         location=worker.location,
         latitude=worker.latitude,
         longitude=worker.longitude,
-        user_email=worker.user_email,  # Add user email
+        user_email=worker.user_email,
+        availability_type=worker.availability_type or "everyday",
+        available_days=worker.available_days,
         is_verified=False,     # 🔒 Admin must approve
-        is_available=True
+        is_available=is_available
     )
 
     db.add(new_worker)
@@ -132,6 +189,9 @@ def update_worker(worker_id: int, worker: WorkerCreate, email: str = Query(...),
     existing_worker.location = worker.location
     existing_worker.latitude = worker.latitude
     existing_worker.longitude = worker.longitude
+    existing_worker.availability_type = worker.availability_type or "everyday"
+    existing_worker.available_days = worker.available_days
+    existing_worker.is_available = worker.availability_type != "not_available"
 
     db.commit()
     db.refresh(existing_worker)
