@@ -10,6 +10,8 @@ class WorkerCreate(BaseModel):
     latitude: Optional[str] = None
     longitude: Optional[str] = None
     user_email: str  # Add user email
+    availability_type: Optional[str] = "everyday"  # everyday | selected_days | not_available
+    available_days: Optional[str] = None  # Comma-separated: "Mon,Tue,Wed"
 
     model_config = ConfigDict(from_attributes=True)
 
