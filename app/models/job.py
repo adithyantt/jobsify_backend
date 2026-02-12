@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from datetime import datetime
 from app.database import Base
 
@@ -23,3 +23,12 @@ class Job(Base):
     @property
     def is_verified(self):
         return self.verified
+
+
+class SavedJob(Base):
+    __tablename__ = "saved_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_email = Column(String, nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    saved_at = Column(String, default=lambda: datetime.now().isoformat())
