@@ -6,10 +6,18 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from datetime import datetime, timedelta
 
 from app.database import get_db
 from app.schemas.user import UserCreate, UserLogin
 from app.models.user import User
+
+# JWT Configuration
+JWT_SECRET = "your-secret-key-change-in-production"  # Change this in production!
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION_HOURS = 24
+
 
 security = HTTPBearer()
 
@@ -152,12 +160,18 @@ def verify_otp(data: dict, db: Session = Depends(get_db)):
     # Remove OTP from storage
     del otp_storage[db_user.email]
 
+    # Create JWT access token for the newly verified user
+    access_token = create_access_token(data={"sub": db_user.email})
+
     return {
         "message": "Email verified successfully",
         "email": db_user.email,
         "role": db_user.role,
-        "name": db_user.name
+        "name": db_user.name,
+        "access_token": access_token,
+        "token_type": "bearer"
     }
+
 
 
 # ================= LOGIN =================
@@ -166,31 +180,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 
     db_user = db.query(User).filter(User.email == user.email).first()
 
-    # 🔐 Auto-create admin user if not exists
-    if not db_user and user.email in ADMIN_EMAILS:
-        # Default admin password
-        default_password = "admin123"
-        hashed_password = bcrypt.hashpw(default_password.encode(), bcrypt.gensalt()).decode()
-
-        # Extract name from email (before @)
-        admin_name = user.email.split('@')[0].replace('.', ' ').title()
-
-        new_admin = User(
-            name=admin_name,
-            email=user.email,
-            password=hashed_password,
-            role="admin",
-            phone=None,
-            verified=True,
-            email_verified=True  # Admins don't need email verification
-        )
-
-        db.add(new_admin)
-        db.commit()
-        db.refresh(new_admin)
-        db_user = new_admin
-
     if not db_user:
+
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not bcrypt.checkpw(
@@ -212,27 +203,169 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "message": "Account not verified. OTP sent to your email. Please verify your email."
         }
 
+    # Create JWT access token
+    access_token = create_access_token(data={"sub": db_user.email})
+
     return {
         "message": "Login successful",
         "id": db_user.id,
         "name": db_user.name,
         "email": db_user.email,
-        "role": db_user.role
+        "role": db_user.role,
+        "access_token": access_token,
+        "token_type": "bearer"
     }
+
+
+def create_access_token(data: dict):
+    """Create a JWT access token."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str):
+    """Verify and decode a JWT token."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 
 # 🔐 GET CURRENT ADMIN (Dependency for protected routes)
 def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    print(f"DEBUG: Authorization header received: {credentials}")
+    print(f"DEBUG: Token: {credentials.credentials[:50]}..." if len(credentials.credentials) > 50 else f"DEBUG: Token: {credentials.credentials}")
     token = credentials.credentials
-    # For simplicity, we'll decode the token (in production, use JWT)
-    # Assuming token is just the email for now
-    try:
-        # This is a simplified version - in production use proper JWT
-        payload = token  # Simplified
-        email = payload
+    
+    # Check for null/empty/invalid token before attempting JWT verification
+    if not token or token == "null" or token == "undefined" or token.strip() == "":
+        print(f"DEBUG: Invalid token value received: '{token}'")
+        raise HTTPException(status_code=401, detail="Authentication required. Please login.")
 
+    try:
+        payload = verify_token(token)
+        print(f"DEBUG: Token payload: {payload}")
+        email = payload.get("sub")
+        print(f"DEBUG: Email from token: {email}")
+        if not email:
+
+
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        print(f"DEBUG: ADMIN_EMAILS list: {ADMIN_EMAILS}")
+        print(f"DEBUG: Is {email} in ADMIN_EMAILS? {email in ADMIN_EMAILS}")
+        
+        # Check if user is in predefined admin emails list
+        if email in ADMIN_EMAILS:
+            # Get or create admin user
+            user = db.query(User).filter(User.email == email).first()
+            print(f"DEBUG: User query result: {user}")
+            if user:
+
+
+                # Update role to admin if not already set
+                if user.role != "admin":
+                    user.role = "admin"
+                    db.commit()
+                return user
+            else:
+                # Admin email not found in DB - this shouldn't happen for predefined admins
+                pass
+
+        # Fallback: check database for role="admin"
         user = db.query(User).filter(User.email == email, User.role == "admin").first()
+        print(f"DEBUG: Fallback query result: {user}")
         if not user:
+            print(f"DEBUG: No admin user found, raising 401")
             raise HTTPException(status_code=401, detail="Invalid token or not admin")
+        print(f"DEBUG: Admin user found, returning user")
         return user
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except HTTPException as he:
+        print(f"DEBUG: HTTPException raised: {he.detail}")
+        raise
+    except Exception as e:
+        print(f"DEBUG: Exception in get_current_admin: {str(e)}")
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+
+# 🔐 GET CURRENT USER (Dependency for any authenticated user)
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
+    """Verify token and return current user (any role)."""
+    token = credentials.credentials
+    
+    # Check for null/empty/invalid token before attempting JWT verification
+    if not token or token == "null" or token == "undefined" or token.strip() == "":
+        print(f"DEBUG: Invalid token value received in get_current_user: '{token}'")
+        raise HTTPException(status_code=401, detail="Authentication required. Please login.")
+    
+    try:
+
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+
+# ================= SESSION MANAGEMENT =================
+
+# 📋 GET CURRENT USER INFO (For frontend session check)
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Returns current user info if token is valid.
+    Frontend calls this on app load to check session and get role for routing.
+    """
+    return {
+        "id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "role": current_user.role,
+        "email_verified": current_user.email_verified,
+        "verified": current_user.verified
+    }
+
+
+# 🔄 REFRESH TOKEN (Extend session)
+@router.post("/refresh")
+def refresh_token(current_user: User = Depends(get_current_user)):
+    """
+    Refresh access token to extend session expiration.
+    Call this when user is active to prevent automatic logout.
+    """
+    # Create new token with fresh expiration
+    new_token = create_access_token(data={"sub": current_user.email})
+    
+    return {
+        "message": "Token refreshed successfully",
+        "access_token": new_token,
+        "token_type": "bearer"
+    }
+
+
+# 🚪 LOGOUT (Client-side token removal)
+@router.post("/logout")
+def logout():
+    """
+    Logout endpoint. Frontend should remove token from storage.
+    This is mainly for logging purposes.
+    """
+    return {
+        "message": "Logout successful. Please remove token from client storage."
+    }

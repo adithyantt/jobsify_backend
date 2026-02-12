@@ -6,3 +6,4 @@ from .admin_reports import router as admin_reports
 from .admin_workers import router as admin_workers
 from .notifications import router as notifications
 from .admin import router as admin
+from .reviews import router as reviews

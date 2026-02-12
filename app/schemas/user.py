@@ -17,3 +17,17 @@ class UserLogin(BaseModel):
     password: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ✅ For Admin Users Response
+class UserResponse(BaseModel):
+    id: int
+    name: Optional[str]
+    email: str
+    role: str
+    phone: Optional[str]
+    verified: bool
+    email_verified: bool
+    blocked: bool
+
+    model_config = ConfigDict(from_attributes=True)
