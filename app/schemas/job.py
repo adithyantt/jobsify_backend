@@ -21,3 +21,19 @@ class JobResponse(JobCreate):
     is_verified: bool
     verified: bool
     created_at: str
+
+
+class SavedJobCreate(BaseModel):
+    user_email: str
+    job_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SavedJobResponse(BaseModel):
+    id: int
+    user_email: str
+    job_id: int
+    saved_at: str
+
+    model_config = ConfigDict(from_attributes=True)
