@@ -78,6 +78,7 @@ def get_workers(
 # =====================================================
 # 👤 USER SIDE – GET MY WORKERS (BY EMAIL)
 # =====================================================
+
 @router.get("/my", response_model=list[WorkerResponse])
 def get_my_workers(email: str, db: Session = Depends(get_db)):
     return (
@@ -85,6 +86,26 @@ def get_my_workers(email: str, db: Session = Depends(get_db)):
         .filter(Worker.user_email == email)
         .all()
     )
+
+
+# =====================================================
+# 👤 USER SIDE – GET WORKER BY ID
+# =====================================================
+@router.get("/{worker_id}", response_model=WorkerResponse)
+def get_worker_by_id(worker_id: int, db: Session = Depends(get_db)):
+    try:
+        worker = db.query(Worker).filter(Worker.id == worker_id).first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Worker not found")
+        return worker
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in get_worker_by_id: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 # =====================================================
 # 👤 USER SIDE – CREATE WORKER PROFILE
@@ -144,10 +165,13 @@ def approve_worker(worker_id: int, db: Session = Depends(get_db)):
     notification = Notification(
         user_email=worker.user_email,
         title="Worker Approved",
-        message=f"Your worker profile '{worker.name}' has been approved and is now live."
+        message=f"Your worker profile '{worker.name}' has been approved and is now live.",
+        type="worker",
+        reference_id=worker.id
     )
     db.add(notification)
     db.commit()
+
 
     return {
         "message": "Worker approved successfully",
@@ -164,6 +188,18 @@ def reject_worker(worker_id: int, db: Session = Depends(get_db)):
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
 
+    # Create notification for the user before deleting
+    notification = Notification(
+        user_email=worker.user_email,
+        title="Worker Rejected",
+        message=f"Your worker profile '{worker.name}' has been rejected by admin.",
+        type="worker",
+        reference_id=worker.id
+    )
+    db.add(notification)
+    db.commit()
+
+
     db.delete(worker)
     db.commit()
 
@@ -171,6 +207,7 @@ def reject_worker(worker_id: int, db: Session = Depends(get_db)):
         "message": "Worker rejected and deleted successfully",
         "worker_id": worker_id
     }
+
 
 # =====================================================
 # 👤 USER SIDE – UPDATE WORKER

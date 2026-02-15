@@ -39,6 +39,7 @@ def get_jobs(db: Session = Depends(get_db)):
 # =====================================================
 # 👤 USER SIDE – GET MY JOBS (BY EMAIL)
 # =====================================================
+
 @router.get("/my", response_model=list[JobResponse])
 def get_my_jobs(email: str = Query(..., description="User email"), db: Session = Depends(get_db)):
     print(f"DEBUG: get_my_jobs called with email={email}")
@@ -80,6 +81,26 @@ def get_my_jobs(email: str = Query(..., description="User email"), db: Session =
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+
+
+# =====================================================
+# 👤 USER SIDE – GET JOB BY ID
+# =====================================================
+@router.get("/{job_id}", response_model=JobResponse)
+def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
+    try:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in get_job_by_id: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 
 
@@ -154,10 +175,13 @@ def approve_job(job_id: int, db: Session = Depends(get_db), current_admin: User 
     notification = Notification(
         user_email=job.user_email,
         title="Job Approved",
-        message=f"Your job '{job.title}' has been approved and is now live."
+        message=f"Your job '{job.title}' has been approved and is now live.",
+        type="job",
+        reference_id=job.id
     )
     db.add(notification)
     db.commit()
+
 
     return {
         "message": "Job approved successfully",
@@ -179,10 +203,13 @@ def reject_job(job_id: int, db: Session = Depends(get_db), current_admin: User =
     notification = Notification(
         user_email=job.user_email,
         title="Job Rejected",
-        message=f"Your job '{job.title}' has been rejected."
+        message=f"Your job '{job.title}' has been rejected.",
+        type="job",
+        reference_id=job.id
     )
     db.add(notification)
     db.commit()
+
 
     db.delete(job)
     db.commit()

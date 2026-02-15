@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -7,6 +6,7 @@ from app.models.user import User
 from app.models.job import Job
 from app.models.workers import Worker
 from app.models.report import Report
+from app.models.notification import Notification
 from app.schemas.user import UserResponse
 from app.routers.auth import get_current_admin
 
@@ -44,4 +44,16 @@ def block_user(user_id: int, db: Session = Depends(get_db), current_admin: User 
         raise HTTPException(status_code=404, detail="User not found")
     user.blocked = True
     db.commit()
+    
+    # Create notification for the user
+    notification = Notification(
+        user_email=user.email,
+        title="Account Blocked",
+        message="Your account has been blocked by admin. Please contact support for more information.",
+        type="account",
+        reference_id=user.id
+    )
+    db.add(notification)
+    db.commit()
+    
     return {"message": "User blocked successfully"}
