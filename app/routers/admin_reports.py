@@ -72,11 +72,17 @@ def take_action_on_report(
             worker.is_available = False
 
     target = f"worker ID {report.worker_id}" if report.worker_id is not None else f"job ID {report.job_id}"
+    
+    # Determine type and reference_id based on report target
+    notification_type = "worker" if report.worker_id is not None else "job"
+    reference_id = report.worker_id if report.worker_id is not None else report.job_id
 
     notification = Notification(
         user_email=report.reporter_email,
         title="Report Action Taken",
-        message=f"Your report on {target} has been {status}."
+        message=f"Your report on {target} has been {status}.",
+        type=notification_type,
+        reference_id=reference_id
     )
     db.add(notification)
 
