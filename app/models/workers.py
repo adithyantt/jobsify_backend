@@ -6,7 +6,9 @@ class Worker(Base):
     __tablename__ = "workers"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
+    first_name = Column(String, nullable=True)  # First name for atomicity
+    last_name = Column(String, nullable=True)   # Last name for atomicity
+    name = Column(String)                        # Kept for backward compatibility
     role = Column(String)
     phone = Column(String)
     experience = Column(Integer)

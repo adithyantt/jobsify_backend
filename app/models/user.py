@@ -5,7 +5,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=True)
+    first_name = Column(String, nullable=True)  # First name for atomicity
+    last_name = Column(String, nullable=True)   # Last name for atomicity
+    name = Column(String, nullable=True)         # Kept for backward compatibility
     email = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)  # hashed password only
     role = Column(
