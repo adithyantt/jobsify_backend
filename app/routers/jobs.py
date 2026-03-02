@@ -37,6 +37,48 @@ def get_jobs(db: Session = Depends(get_db)):
 
 
 # =====================================================
+# 👤 USER SIDE – GET SAVED JOBS
+# =====================================================
+@router.get("/saved", response_model=list[JobResponse])
+def get_saved_jobs(email: str = Query(...), db: Session = Depends(get_db)):
+    try:
+        saved_jobs = (
+            db.query(Job)
+            .join(SavedJob, Job.id == SavedJob.job_id)
+            .filter(SavedJob.user_email == email)
+            .filter(Job.verified == True)
+            .order_by(SavedJob.saved_at.desc())
+            .all()
+        )
+
+        return saved_jobs
+    except Exception as e:
+        print(f"Exception in get_saved_jobs: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to get saved jobs: {str(e)}")
+
+
+# =====================================================
+# 👤 USER SIDE – CHECK IF JOB IS SAVED
+# =====================================================
+@router.get("/saved/{job_id}")
+def check_saved_job(job_id: int, email: str = Query(...), db: Session = Depends(get_db)):
+    try:
+        saved_job = db.query(SavedJob).filter(
+            SavedJob.job_id == job_id,
+            SavedJob.user_email == email
+        ).first()
+
+        return {"is_saved": saved_job is not None}
+    except Exception as e:
+        print(f"Exception in check_saved_job: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to check saved job: {str(e)}")
+
+
+# =====================================================
 # 👤 USER SIDE – GET MY JOBS (BY EMAIL)
 # =====================================================
 
@@ -100,9 +142,6 @@ def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-
-
-
 
 
 # =====================================================
@@ -368,45 +407,3 @@ def unsave_job(job_id: int, email: str = Query(...), db: Session = Depends(get_d
         traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to unsave job: {str(e)}")
-
-
-# =====================================================
-# 👤 USER SIDE – GET SAVED JOBS
-# =====================================================
-@router.get("/saved", response_model=list[JobResponse])
-def get_saved_jobs(email: str = Query(...), db: Session = Depends(get_db)):
-    try:
-        saved_jobs = (
-            db.query(Job)
-            .join(SavedJob, Job.id == SavedJob.job_id)
-            .filter(SavedJob.user_email == email)
-            .filter(Job.verified == True)
-            .order_by(SavedJob.saved_at.desc())
-            .all()
-        )
-
-        return saved_jobs
-    except Exception as e:
-        print(f"Exception in get_saved_jobs: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to get saved jobs: {str(e)}")
-
-
-# =====================================================
-# 👤 USER SIDE – CHECK IF JOB IS SAVED
-# =====================================================
-@router.get("/saved/{job_id}")
-def check_saved_job(job_id: int, email: str = Query(...), db: Session = Depends(get_db)):
-    try:
-        saved_job = db.query(SavedJob).filter(
-            SavedJob.job_id == job_id,
-            SavedJob.user_email == email
-        ).first()
-
-        return {"is_saved": saved_job is not None}
-    except Exception as e:
-        print(f"Exception in check_saved_job: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to check saved job: {str(e)}")
