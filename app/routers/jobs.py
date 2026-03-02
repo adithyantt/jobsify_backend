@@ -275,6 +275,8 @@ def update_job(job_id: int, job: JobCreate, email: str = Query(...), db: Session
     existing_job.phone = job.phone
     existing_job.latitude = job.latitude
     existing_job.longitude = job.longitude
+    existing_job.salary = job.salary
+    existing_job.urgent = job.urgent if job.urgent is not None else False
 
     db.commit()
     db.refresh(existing_job)

@@ -110,9 +110,11 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         bcrypt.gensalt()
     ).decode()
 
-    # 🆕 Create user
+    # 🆕 Create user with first_name and last_name for atomicity
     new_user = User(
-        name=user.name,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        name=f"{user.first_name} {user.last_name}",  # Combined name for backward compatibility
         email=user.email,
         password=hashed_password,
         role=role,
@@ -168,6 +170,8 @@ def verify_otp(data: dict, db: Session = Depends(get_db)):
         "email": db_user.email,
         "role": db_user.role,
         "name": db_user.name,
+        "first_name": db_user.first_name,
+        "last_name": db_user.last_name,
         "access_token": access_token,
         "token_type": "bearer"
     }
@@ -210,6 +214,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         "message": "Login successful",
         "id": db_user.id,
         "name": db_user.name,
+        "first_name": db_user.first_name,
+        "last_name": db_user.last_name,
         "email": db_user.email,
         "role": db_user.role,
         "access_token": access_token,

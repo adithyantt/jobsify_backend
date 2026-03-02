@@ -117,7 +117,9 @@ def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
     is_available = worker.availability_type != "not_available"
     
     new_worker = Worker(
-        name=worker.name,
+        first_name=worker.first_name,
+        last_name=worker.last_name,
+        name=f"{worker.first_name} {worker.last_name}",  # Combined name for backward compatibility
         role=worker.role,
         phone=worker.phone,
         experience=worker.experience,
@@ -219,7 +221,10 @@ def update_worker(worker_id: int, worker: WorkerCreate, email: str = Query(...),
     if not existing_worker:
         raise HTTPException(status_code=404, detail="Worker not found or not owned by user")
 
-    existing_worker.name = worker.name
+    # Update with first_name and last_name for atomicity
+    existing_worker.first_name = worker.first_name
+    existing_worker.last_name = worker.last_name
+    existing_worker.name = f"{worker.first_name} {worker.last_name}"  # Combined for backward compatibility
     existing_worker.role = worker.role
     existing_worker.phone = worker.phone
     existing_worker.experience = worker.experience

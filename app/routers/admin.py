@@ -20,7 +20,8 @@ def get_admin_stats(db: Session = Depends(get_db), current_admin: User = Depends
         users = db.query(User).count()
         # Use func.count to avoid loading all columns (fixes missing column issues)
         from sqlalchemy import func
-        reports = db.query(func.count(Report.id)).scalar() or 0
+        # Count only pending reports (open tickets)
+        reports = db.query(func.count(Report.id)).filter(Report.status == "pending").scalar() or 0
         return {
             "pending_jobs": pending_jobs,
             "providers": providers,
