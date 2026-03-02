@@ -2,7 +2,9 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 class WorkerCreate(BaseModel):
-    name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    name: Optional[str] = None  # Kept for backward compatibility
     role: str
     phone: str
     experience: int
