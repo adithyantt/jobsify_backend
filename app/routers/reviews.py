@@ -242,7 +242,7 @@ def _update_worker_rating(worker_id: int, db: Session):
     if not reviews:
         worker = db.query(Worker).filter(Worker.id == worker_id).first()
         if worker:
-            worker.rating = 4.0
+            worker.rating = 0
             worker.reviews = 0
             db.commit()
         return

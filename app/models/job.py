@@ -19,10 +19,20 @@ class Job(Base):
     urgent = Column(Boolean, default=False)
     salary = Column(String, nullable=True)
     created_at = Column(String, default=lambda: datetime.now().isoformat())
+    
+    # New fields for required workers and hide/soft delete
+    required_workers = Column(Integer, default=1)  # Number of workers needed
+    hired_count = Column(Integer, default=0)  # Number of workers hired so far
+    is_hidden = Column(Boolean, default=False)  # Soft delete - hide job by owner
 
     @property
     def is_verified(self):
         return self.verified
+    
+    @property
+    def vacancies(self):
+        """Calculate remaining vacancies"""
+        return max(0, self.required_workers - self.hired_count)
 
 
 class SavedJob(Base):

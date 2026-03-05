@@ -17,7 +17,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 # ---------------- USER SIDE ----------------
 
 # =====================================================
-# 👤 USER SIDE – GET ONLY VERIFIED JOBS
+# 👤 USER SIDE – GET ONLY VERIFIED JOBS (Not Hidden)
 # =====================================================
 @router.get("", response_model=list[JobResponse])
 def get_jobs(db: Session = Depends(get_db)):
@@ -25,6 +25,7 @@ def get_jobs(db: Session = Depends(get_db)):
         jobs = (
             db.query(Job)
             .filter(Job.verified == True)
+            .filter(Job.is_hidden == False)
             .order_by(Job.id.desc())
             .all()
         )
@@ -50,7 +51,6 @@ def get_saved_jobs(email: str = Query(...), db: Session = Depends(get_db)):
             .order_by(SavedJob.saved_at.desc())
             .all()
         )
-
         return saved_jobs
     except Exception as e:
         print(f"Exception in get_saved_jobs: {e}")
@@ -69,7 +69,6 @@ def check_saved_job(job_id: int, email: str = Query(...), db: Session = Depends(
             SavedJob.job_id == job_id,
             SavedJob.user_email == email
         ).first()
-
         return {"is_saved": saved_job is not None}
     except Exception as e:
         print(f"Exception in check_saved_job: {e}")
@@ -81,7 +80,6 @@ def check_saved_job(job_id: int, email: str = Query(...), db: Session = Depends(
 # =====================================================
 # 👤 USER SIDE – GET MY JOBS (BY EMAIL)
 # =====================================================
-
 @router.get("/my", response_model=list[JobResponse])
 def get_my_jobs(email: str = Query(..., description="User email"), db: Session = Depends(get_db)):
     print(f"DEBUG: get_my_jobs called with email={email}")
@@ -89,17 +87,14 @@ def get_my_jobs(email: str = Query(..., description="User email"), db: Session =
         if not email or email.strip() == "":
             raise HTTPException(status_code=400, detail="Email parameter is required")
         
-        # Validate email format
         email = email.strip().lower()
         if "@" not in email:
             raise HTTPException(status_code=400, detail="Invalid email format")
         
-        # Check if Job model has user_email attribute
         if not hasattr(Job, 'user_email'):
             print("ERROR: Job model does not have user_email attribute")
             raise HTTPException(status_code=500, detail="Server configuration error: missing user_email field")
         
-        # Query jobs with error handling
         try:
             jobs = (
                 db.query(Job)
@@ -111,7 +106,6 @@ def get_my_jobs(email: str = Query(..., description="User email"), db: Session =
             return jobs
         except Exception as query_error:
             print(f"ERROR in database query: {query_error}")
-            # Try to get more details about the error
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Database query error: {str(query_error)}")
@@ -146,7 +140,6 @@ def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
 
 # =====================================================
 # 👤 USER SIDE – CREATE JOB
-# (DEFAULT: verified = False)
 # =====================================================
 @router.post("", response_model=JobResponse)
 def create_job(job: JobCreate, db: Session = Depends(get_db)):
@@ -161,10 +154,13 @@ def create_job(job: JobCreate, db: Session = Depends(get_db)):
             phone=job.phone,
             latitude=job.latitude,
             longitude=job.longitude,
-            user_email=job.user_email,  # Add user email
-            verified=False,   # 🔒 Admin approval required
+            user_email=job.user_email,
+            verified=False,
             urgent=job.urgent if job.urgent is not None else False,
             salary=job.salary,
+            required_workers=job.required_workers if job.required_workers is not None else 1,
+            hired_count=0,
+            is_hidden=False,
         )
 
         db.add(new_job)
@@ -201,7 +197,6 @@ def get_pending_jobs(db: Session = Depends(get_db), current_admin: User = Depend
 # =====================================================
 @router.put("/admin/approve/{job_id}")
 def approve_job(job_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-
     job = db.query(Job).filter(Job.id == job_id).first()
 
     if not job:
@@ -210,7 +205,6 @@ def approve_job(job_id: int, db: Session = Depends(get_db), current_admin: User 
     job.verified = True
     db.commit()
 
-    # Create notification for the user
     notification = Notification(
         user_email=job.user_email,
         title="Job Approved",
@@ -221,24 +215,19 @@ def approve_job(job_id: int, db: Session = Depends(get_db), current_admin: User 
     db.add(notification)
     db.commit()
 
+    return {"message": "Job approved successfully", "job_id": job_id}
 
-    return {
-        "message": "Job approved successfully",
-        "job_id": job_id
-    }
 
 # =====================================================
 # 🛡️ ADMIN SIDE – REJECT JOB
 # =====================================================
 @router.put("/admin/reject/{job_id}")
 def reject_job(job_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-
     job = db.query(Job).filter(Job.id == job_id).first()
 
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Create notification for the user before deleting
     notification = Notification(
         user_email=job.user_email,
         title="Job Rejected",
@@ -249,14 +238,11 @@ def reject_job(job_id: int, db: Session = Depends(get_db), current_admin: User =
     db.add(notification)
     db.commit()
 
-
     db.delete(job)
     db.commit()
 
-    return {
-        "message": "Job rejected and deleted successfully",
-        "job_id": job_id
-    }
+    return {"message": "Job rejected and deleted successfully", "job_id": job_id}
+
 
 # =====================================================
 # 👤 USER SIDE – UPDATE JOB
@@ -277,11 +263,21 @@ def update_job(job_id: int, job: JobCreate, email: str = Query(...), db: Session
     existing_job.longitude = job.longitude
     existing_job.salary = job.salary
     existing_job.urgent = job.urgent if job.urgent is not None else False
+    
+    # Update required_workers if provided
+    if job.required_workers is not None:
+        existing_job.required_workers = job.required_workers
+
+    # Auto-hide job when vacancies become 0
+    current_vacancies = existing_job.required_workers - existing_job.hired_count
+    if current_vacancies <= 0:
+        existing_job.is_hidden = True
 
     db.commit()
     db.refresh(existing_job)
 
     return existing_job
+
 
 # =====================================================
 # 👤 USER SIDE – DELETE JOB
@@ -296,10 +292,8 @@ def delete_job(job_id: int, email: str = Query(...), db: Session = Depends(get_d
     db.delete(job)
     db.commit()
 
-    return {
-        "message": "Job deleted successfully",
-        "job_id": job_id
-    }
+    return {"message": "Job deleted successfully", "job_id": job_id}
+
 
 # =====================================================
 # 👤 USER SIDE – REPORT JOB
@@ -309,7 +303,6 @@ def report_job(report: ReportCreate, db: Session = Depends(get_db)):
     print("report_job called")
     try:
         print(f"Received report: {report}")
-        # Check if job exists
         if report.job_id is None:
             raise HTTPException(status_code=400, detail="job_id is required for job reports")
 
@@ -349,12 +342,10 @@ def report_job(report: ReportCreate, db: Session = Depends(get_db)):
 @router.post("/save", response_model=SavedJobResponse)
 def save_job(saved_job: SavedJobCreate, db: Session = Depends(get_db)):
     try:
-        # Check if job exists
         job = db.query(Job).filter(Job.id == saved_job.job_id).first()
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        # Check if already saved
         existing = db.query(SavedJob).filter(
             SavedJob.user_email == saved_job.user_email,
             SavedJob.job_id == saved_job.job_id
@@ -409,3 +400,141 @@ def unsave_job(job_id: int, email: str = Query(...), db: Session = Depends(get_d
         traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to unsave job: {str(e)}")
+
+
+# =====================================================
+# 👤 USER SIDE – HIDE JOB (Soft Delete)
+# =====================================================
+@router.put("/{job_id}/hide")
+def hide_job(job_id: int, email: str = Query(...), db: Session = Depends(get_db)):
+    try:
+        job = db.query(Job).filter(Job.id == job_id, Job.user_email == email).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found or not owned by user")
+
+        job.is_hidden = True
+        db.commit()
+
+        return {"message": "Job hidden successfully", "job_id": job_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Exception in hide_job: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to hide job: {str(e)}")
+
+
+# =====================================================
+# 👤 USER SIDE – SHOW JOB (Restore from Hidden)
+# =====================================================
+@router.put("/{job_id}/show")
+def show_job(job_id: int, email: str = Query(...), db: Session = Depends(get_db)):
+    try:
+        job = db.query(Job).filter(Job.id == job_id, Job.user_email == email).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found or not owned by user")
+
+        job.is_hidden = False
+        db.commit()
+
+        return {"message": "Job restored successfully", "job_id": job_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Exception in show_job: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to show job: {str(e)}")
+
+
+# =====================================================
+# 👤 USER SIDE – HIRE WORKER (Update Vacancies)
+# =====================================================
+@router.put("/{job_id}/hire")
+def hire_worker(job_id: int, email: str = Query(...), db: Session = Depends(get_db)):
+    try:
+        job = db.query(Job).filter(Job.id == job_id, Job.user_email == email).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found or not owned by user")
+
+        job.hired_count += 1
+        db.commit()
+        db.refresh(job)
+
+        # Auto-hide job when vacancies become 0
+        if job.vacancies <= 0:
+            job.is_hidden = True
+            db.commit()
+            db.refresh(job)
+
+        return {
+            "message": "Worker hired successfully",
+            "job_id": job_id,
+            "hired_count": job.hired_count,
+            "vacancies": job.vacancies,
+            "is_hidden": job.is_hidden
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Exception in hire_worker: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update vacancies: {str(e)}")
+
+
+# =====================================================
+# 👤 USER SIDE – UPDATE REQUIRED WORKERS
+# =====================================================
+@router.put("/{job_id}/required-workers")
+def update_required_workers(
+    job_id: int,
+    required_workers: int,
+    email: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        job = db.query(Job).filter(Job.id == job_id, Job.user_email == email).first()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found or not owned by user")
+
+        if required_workers < job.hired_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot set required workers less than already hired ({job.hired_count})"
+            )
+
+        job.required_workers = required_workers
+        db.commit()
+        db.refresh(job)
+
+        # Auto-hide job when vacancies become 0
+        if job.vacancies <= 0:
+            job.is_hidden = True
+            db.commit()
+            db.refresh(job)
+
+        return {
+            "message": "Required workers updated successfully",
+            "job_id": job_id,
+            "required_workers": job.required_workers,
+            "hired_count": job.hired_count,
+            "vacancies": job.vacancies,
+            "is_hidden": job.is_hidden
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Exception in update_required_workers: {e}")
+        import traceback
+        traceback.print_exc()
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update required workers: {str(e)}")
