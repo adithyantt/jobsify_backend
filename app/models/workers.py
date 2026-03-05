@@ -21,5 +21,5 @@ class Worker(Base):
     availability_type = Column(String, default="everyday")  # everyday | selected_days | not_available
     available_days = Column(String, nullable=True)  # Comma-separated days: "Mon,Tue,Wed"
     is_available = Column(Boolean, default=True)
-    rating = Column(Float, default=4.0)
+    rating = Column(Float, default=0)
     reviews = Column(Integer, default=0)
