@@ -6,8 +6,10 @@ from app.database import get_db
 from app.models.workers import Worker
 from app.models.report import Report
 from app.models.notification import Notification
+from app.models.user import User
 from app.schemas.workers import WorkerCreate, WorkerResponse
 from app.schemas.report import ReportCreate, ReportResponse
+from app.routers.auth import get_current_admin
 
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
@@ -143,7 +145,7 @@ def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
 # 🛡️ ADMIN SIDE – GET PENDING WORKERS
 # =====================================================
 @router.get("/admin/pending", response_model=list[WorkerResponse])
-def get_pending_workers(db: Session = Depends(get_db)):
+def get_pending_workers(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
     return (
         db.query(Worker)
         .filter(Worker.is_verified == False)
@@ -154,7 +156,7 @@ def get_pending_workers(db: Session = Depends(get_db)):
 # 🛡️ ADMIN SIDE – APPROVE WORKER
 # =====================================================
 @router.put("/admin/approve/{worker_id}")
-def approve_worker(worker_id: int, db: Session = Depends(get_db)):
+def approve_worker(worker_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
     worker = db.query(Worker).filter(Worker.id == worker_id).first()
 
     if not worker:
@@ -184,7 +186,7 @@ def approve_worker(worker_id: int, db: Session = Depends(get_db)):
 # 🛡️ ADMIN SIDE – REJECT WORKER
 # =====================================================
 @router.put("/admin/reject/{worker_id}")
-def reject_worker(worker_id: int, db: Session = Depends(get_db)):
+def reject_worker(worker_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
     worker = db.query(Worker).filter(Worker.id == worker_id).first()
 
     if not worker:

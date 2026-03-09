@@ -34,6 +34,8 @@ from app.models.user import User
 from app.models.job import Job
 from app.models.workers import Worker
 from app.models.report import Report
+from app.models.review import Review
+from app.models.notification import Notification
 
 # 👇 CREATE TABLES
 Base.metadata.create_all(bind=engine)

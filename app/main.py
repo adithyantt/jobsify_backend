@@ -10,6 +10,7 @@ from app.models.job import Job
 from app.models.workers import Worker
 from app.models.report import Report
 from app.models.review import Review
+from app.models.notification import Notification
 
 
 from app.routers import auth, jobs, workers, reports, reviews
