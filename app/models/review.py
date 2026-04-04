@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
+from datetime import datetime, timezone
 from app.database import Base
 
 
@@ -7,12 +7,16 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id = Column(Integer, primary_key=True, index=True)
-    worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False)
-    reviewer_email = Column(String, nullable=False)  # Email of user who gave review
-    reviewer_name = Column(String, nullable=True)     # Name of reviewer
-    rating = Column(Integer, nullable=False)          # 1-5 star rating
-    comment = Column(String, nullable=True)           # Review text
-    created_at = Column(DateTime, default=datetime.utcnow)
+    worker_id = Column(Integer, ForeignKey("workers.id"), nullable=False, index=True)
+    reviewer_email = Column(String, nullable=False, index=True)
+    reviewer_name = Column(String, nullable=True)
+    rating = Column(Integer, nullable=False, index=True)
+    comment = Column(String, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    __table_args__ = (
+        Index('idx_reviews_worker_rating', 'worker_id', 'rating'),
+    )
     
     def to_dict(self):
         return {
