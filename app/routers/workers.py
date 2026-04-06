@@ -14,10 +14,47 @@ from app.routers.auth import get_current_admin
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
 
-# 🔹 GET VERIFIED & AVAILABLE WORKERS (WITH FILTERING)
-@router.get("", response_model=list[WorkerResponse])
+
+def _normalize_email(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip().lower()
+    return value or None
+
+
+def _serialize_worker(worker: Worker, viewer_email: Optional[str] = None) -> dict:
+    owner_email = _normalize_email(worker.user_email)
+    viewer_email = _normalize_email(viewer_email)
+    is_owner = viewer_email is not None and viewer_email == owner_email
+    return {
+        "id": worker.id,
+        "first_name": worker.first_name,
+        "last_name": worker.last_name,
+        "name": worker.name,
+        "role": worker.role,
+        "phone": worker.phone,
+        "experience": worker.experience,
+        "location": worker.location,
+        "latitude": worker.latitude,
+        "longitude": worker.longitude,
+        "user_email": worker.user_email,
+        "availability_type": worker.availability_type,
+        "available_days": worker.available_days,
+        "rating": worker.rating,
+        "reviews": worker.reviews,
+        "is_available": worker.is_available,
+        "is_verified": worker.is_verified,
+        "is_owner": is_owner,
+        "can_message": not is_owner,
+    }
+
+# 🔹 GET VERIFIED & AVAILABLE WORKERS (WITH FILTERING AND PAGINATION)
+@router.get("")
 def get_workers(
     db: Session = Depends(get_db),
+    viewer_email: Optional[str] = Query(None, description="Logged-in user email for ownership flags"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     min_experience: Optional[int] = Query(None, description="Minimum years of experience"),
     max_experience: Optional[int] = Query(None, description="Maximum years of experience"),
     min_rating: Optional[float] = Query(None, description="Minimum rating (0-5)"),
@@ -62,19 +99,35 @@ def get_workers(
     if location is not None:
         query = query.filter(Worker.location.ilike(f"%{location}%"))
     
-    workers = query.all()
+    # Get total count
+    total = query.count()
     
-    # Apply sorting
+    # Apply pagination
+    offset = (page - 1) * limit
+    workers = query.order_by(Worker.id.desc()).offset(offset).limit(limit).all()
+    
+    # Apply sorting (in memory after pagination)
     if sort_by == "experience_high":
-        workers.sort(key=lambda w: w.experience, reverse=True)
+        workers.sort(key=lambda w: w.experience or 0, reverse=True)
     elif sort_by == "experience_low":
-        workers.sort(key=lambda w: w.experience)
+        workers.sort(key=lambda w: w.experience or 0)
     elif sort_by == "rating_high":
         workers.sort(key=lambda w: w.rating or 0, reverse=True)
     elif sort_by == "rating_low":
         workers.sort(key=lambda w: w.rating or 0)
     
-    return workers
+    # Convert SQLAlchemy objects to dictionaries
+    workers_list = []
+    for worker in workers:
+        workers_list.append(_serialize_worker(worker, viewer_email))
+    
+    return {
+        "workers": workers_list,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total + limit - 1) // limit
+    }
 
 
 # =====================================================
@@ -83,23 +136,29 @@ def get_workers(
 
 @router.get("/my", response_model=list[WorkerResponse])
 def get_my_workers(email: str, db: Session = Depends(get_db)):
-    return (
+    email = _normalize_email(email)
+    workers = (
         db.query(Worker)
         .filter(Worker.user_email == email)
         .all()
     )
+    return [_serialize_worker(worker, email) for worker in workers]
 
 
 # =====================================================
 # 👤 USER SIDE – GET WORKER BY ID
 # =====================================================
 @router.get("/{worker_id}", response_model=WorkerResponse)
-def get_worker_by_id(worker_id: int, db: Session = Depends(get_db)):
+def get_worker_by_id(
+    worker_id: int,
+    viewer_email: Optional[str] = Query(None, description="Logged-in user email for ownership flags"),
+    db: Session = Depends(get_db),
+):
     try:
         worker = db.query(Worker).filter(Worker.id == worker_id).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Worker not found")
-        return worker
+        return _serialize_worker(worker, viewer_email)
     except HTTPException:
         raise
     except Exception as e:
@@ -115,6 +174,7 @@ def get_worker_by_id(worker_id: int, db: Session = Depends(get_db)):
 # =====================================================
 @router.post("", response_model=WorkerResponse)
 def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
+    owner_email = _normalize_email(worker.user_email)
     # Determine is_available based on availability_type
     is_available = worker.availability_type != "not_available"
     
@@ -128,7 +188,7 @@ def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
         location=worker.location,
         latitude=worker.latitude,
         longitude=worker.longitude,
-        user_email=worker.user_email,
+        user_email=owner_email,
         availability_type=worker.availability_type or "everyday",
         available_days=worker.available_days,
         is_verified=False,     # 🔒 Admin must approve
@@ -139,18 +199,19 @@ def create_worker(worker: WorkerCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_worker)
 
-    return new_worker
+    return _serialize_worker(new_worker, owner_email)
 
 # =====================================================
 # 🛡️ ADMIN SIDE – GET PENDING WORKERS
 # =====================================================
 @router.get("/admin/pending", response_model=list[WorkerResponse])
 def get_pending_workers(db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-    return (
+    workers = (
         db.query(Worker)
         .filter(Worker.is_verified == False)
         .all()
     )
+    return [_serialize_worker(worker) for worker in workers]
 
 # =====================================================
 # 🛡️ ADMIN SIDE – APPROVE WORKER
@@ -218,6 +279,7 @@ def reject_worker(worker_id: int, db: Session = Depends(get_db), current_admin: 
 # =====================================================
 @router.put("/{worker_id}", response_model=WorkerResponse)
 def update_worker(worker_id: int, worker: WorkerCreate, email: str = Query(...), db: Session = Depends(get_db)):
+    email = _normalize_email(email)
     existing_worker = db.query(Worker).filter(Worker.id == worker_id, Worker.user_email == email).first()
 
     if not existing_worker:
@@ -240,7 +302,7 @@ def update_worker(worker_id: int, worker: WorkerCreate, email: str = Query(...),
     db.commit()
     db.refresh(existing_worker)
 
-    return existing_worker
+    return _serialize_worker(existing_worker, email)
 
 # =====================================================
 # 👤 USER SIDE – DELETE WORKER
