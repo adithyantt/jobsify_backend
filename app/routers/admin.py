@@ -8,6 +8,10 @@ from app.models.workers import Worker
 from app.models.report import Report
 from app.models.notification import Notification
 from app.schemas.user import UserResponse
+from pydantic import BaseModel
+
+class BlockUserRequest(BaseModel):
+    user_id: int
 from app.routers.auth import get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -39,8 +43,8 @@ def get_all_users(db: Session = Depends(get_db), current_admin: User = Depends(g
     return db.query(User).all()
 
 @router.put("/users/block")
-def block_user(user_id: int, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
-    user = db.query(User).filter(User.id == user_id).first()
+def block_user(request: BlockUserRequest, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
+    user = db.query(User).filter(User.id == request.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.blocked = True
