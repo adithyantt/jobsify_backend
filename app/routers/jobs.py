@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+import re
 
 from app.database import get_db
 from app.models.job import Job, SavedJob
@@ -14,27 +15,206 @@ from app.routers.auth import get_current_admin
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
 
+def parse_salary_range_fixed(
+    salary_str: Optional[str],
+) -> tuple[Optional[float], Optional[float]]:
+    """Extract a numeric salary range from free-form salary text."""
+    if not salary_str or not isinstance(salary_str, str) or not salary_str.strip():
+        return None, None
+
+    numbers = [
+        float(num) for num in re.findall(r"\d+\.?\d*", salary_str.replace(",", ""))
+    ]
+    if not numbers:
+        return None, None
+
+    return min(numbers), max(numbers)
+
+
+@router.get("")
+def get_jobs_fixed(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    location: Optional[str] = Query(
+        None, description="Filter by location (comma-separated for multiple)"
+    ),
+    min_salary: Optional[float] = Query(None, description="Minimum salary"),
+    max_salary: Optional[float] = Query(None, description="Maximum salary"),
+    urgent: Optional[bool] = Query(None, description="Urgent jobs only"),
+    db: Session = Depends(get_db),
+):
+    try:
+        query = db.query(Job).filter(
+            Job.verified == True,
+            Job.is_hidden == False,
+        )
+
+        if urgent is not None:
+            query = query.filter(Job.urgent == urgent)
+
+        if category:
+            query = query.filter(Job.category.ilike(f"%{category}%"))
+        if location:
+            locations = [loc.strip() for loc in location.split(",") if loc.strip()]
+            for selected_location in locations:
+                query = query.filter(Job.location.ilike(f"%{selected_location}%"))
+
+        salary_conditions = []
+        if min_salary is not None:
+            salary_conditions.append(Job.salary.like(f"%{int(min_salary)}%"))
+        if max_salary is not None:
+            salary_conditions.append(Job.salary.like(f"%{int(max_salary)}%"))
+        if salary_conditions:
+            query = query.filter(*salary_conditions)
+
+        total = query.count()
+        offset = (page - 1) * limit
+        jobs = query.order_by(Job.id.desc()).offset(offset).limit(limit).all()
+
+        jobs_list = []
+        for job in jobs:
+            salary_min, salary_max = parse_salary_range_fixed(job.salary)
+            jobs_list.append(
+                {
+                    "id": job.id,
+                    "title": job.title,
+                    "category": job.category,
+                    "description": job.description,
+                    "location": job.location,
+                    "phone": job.phone,
+                    "latitude": job.latitude,
+                    "longitude": job.longitude,
+                    "user_email": job.user_email,
+                    "urgent": job.urgent,
+                    "salary": job.salary,
+                    "salary_min": salary_min or 0.0,
+                    "salary_max": salary_max or 0.0,
+                    "required_workers": job.required_workers,
+                    "is_verified": job.is_verified,
+                    "verified": job.verified,
+                    "created_at": job.created_at,
+                    "hired_count": job.hired_count,
+                    "is_hidden": job.is_hidden,
+                    "vacancies": job.vacancies,
+                }
+            )
+
+        return {
+            "jobs": jobs_list,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit,
+        }
+    except Exception as e:
+        print(f"ERROR in get_jobs_fixed: {e}")
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
 # ---------------- USER SIDE ----------------
 
 # =====================================================
-# 👤 USER SIDE – GET ONLY VERIFIED JOBS (Not Hidden)
+# 👤 USER SIDE – GET ONLY VERIFIED JOBS (Not Hidden) - WITH PAGINATION
 # =====================================================
-@router.get("", response_model=list[JobResponse])
-def get_jobs(db: Session = Depends(get_db)):
+@router.get("")
+def get_jobs(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    location: Optional[str] = Query(None, description="Filter by location (comma-separated for multiple)"),
+    min_salary: Optional[float] = Query(None, description="Minimum salary"),
+    max_salary: Optional[float] = Query(None, description="Maximum salary"),
+    urgent: Optional[bool] = Query(None, description="Urgent jobs only"),
+    db: Session = Depends(get_db)
+):
+    import re
+    
+def parse_salary_range(salary_str: Optional[str]) -> tuple[Optional[float], Optional[float]]:
+    """Parse salary str like '₹800-1000/day' → (800.0, 1000.0), '₹500' → (500.0, 500.0), invalid → (None, None)"""
+    if not salary_str or not isinstance(salary_str, str) or not salary_str.strip():
+        return None, None
+    numbers = [float(num) for num in re.findall(r'\d+\.?\d*', salary_str.replace(',', ''))]
+    if not numbers:
+        return None, None
+    return min(numbers), max(numbers)
+    
     try:
-        jobs = (
-            db.query(Job)
-            .filter(Job.verified == True)
-            .filter(Job.is_hidden == False)
-            .order_by(Job.id.desc())
-            .all()
+        # Base query
+        query = db.query(Job).filter(
+            Job.verified == True,
+            Job.is_hidden == False
         )
-        return jobs
+        
+        if urgent is not None:
+            query = query.filter(Job.urgent == urgent)
+        
+        # Apply filters
+        if category:
+            query = query.filter(Job.category.ilike(f"%{category}%"))
+        if location:
+            locations = [loc.strip() for loc in location.split(',')]
+            location_conditions = [Job.location.ilike(f"%{loc}%") for loc in locations]
+            query = query.filter(*location_conditions)
+        
+# Salary filter - FIXED for performance (SQL LIKE instead of Python loop)
+        salary_conditions = []
+        if min_salary is not None:
+            salary_conditions.append(Job.salary.like(f'%{int(min_salary)}%'))
+        if max_salary is not None:
+            salary_conditions.append(Job.salary.like(f'%{int(max_salary)}%'))
+        if salary_conditions:
+            query = query.filter(*salary_conditions)
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        offset = (page - 1) * limit
+        jobs = query.order_by(Job.id.desc()).offset(offset).limit(limit).all()
+        
+        # Convert SQLAlchemy objects to dictionaries
+        jobs_list = []
+        for job in jobs:
+            jobs_list.append({
+                "id": job.id,
+                "title": job.title,
+                "category": job.category,
+                "description": job.description,
+                "location": job.location,
+                "phone": job.phone,
+                "latitude": job.latitude,
+                "longitude": job.longitude,
+                "user_email": job.user_email,
+                "urgent": job.urgent,
+"salary": job.salary,
+                "salary_min": parse_salary_range(job.salary)[0] or 0.0,
+                "salary_max": parse_salary_range(job.salary)[1] or 0.0,
+                "required_workers": job.required_workers,
+                "is_verified": job.is_verified,
+                "verified": job.verified,
+                "created_at": job.created_at,
+                "hired_count": job.hired_count,
+                "is_hidden": job.is_hidden,
+                "vacancies": job.vacancies
+            })
+        
+        return {
+            "jobs": jobs_list,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit
+        }
     except Exception as e:
         print(f"ERROR in get_jobs: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 
 
 # =====================================================
