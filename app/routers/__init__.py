@@ -7,3 +7,4 @@ from .admin_workers import router as admin_workers
 from .notifications import router as notifications
 from .admin import router as admin
 from .reviews import router as reviews
+from .messages import router as messages
